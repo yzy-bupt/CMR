@@ -7,17 +7,18 @@ from scipy.io import loadmat
 from model import P_GNN, I_GNN
 from train_model import train_model, train_model_incomplete
 from load_data import get_loader
-from evaluate import fx_calc_map_label
+from evaluate import fx_calc_map_label, fx_calc_recall_label, cal_val_list
 
 ######################################################################
 # Start running
 
 if __name__ == '__main__':
     # environmental setting: setting the following parameters based on your experimental environment.
-    os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
     dataset = 'MS-COCO'  # 'mirflickr' or 'NUS-WIDE-TC21' or 'MS-COCO'
     model = 'I-GNN'  # 'I-GNN' or 'P-GNN'
     embedding = 'glove'  # 'glove' or 'googlenews' or 'fasttext' or 'None'
+    eval_method = 'map'
 
     # data parameters
     DATA_DIR = 'data/' + dataset + '/'
@@ -106,20 +107,20 @@ if __name__ == '__main__':
     # Observe that all parameters are being optimized
     optimizer = optim.Adam(params_to_update, lr=lr, betas=betas)
     if EVAL:
-        model_ft.load_state_dict(torch.load('model/DALGNN_' + dataset + '.pth'))
+        model_ft.load_state_dict(torch.load('model_v2/DALGNN_' + dataset + '.pth'))
     else:
         print('...Training is beginning...')
         # Train and evaluate
         if INCOMPLETE:
             model_ft, img_acc_hist, txt_acc_hist, loss_hist = train_model(model_ft, data_loader, optimizer, alpha, beta,
-                                                                          temp, gamma, max_epoch)
+                                                                          temp, gamma, max_epoch, eval_method)
             data_loader, input_data_par = get_loader(DATA_DIR, batch_size, True, True)
             optimizer = optim.SGD(params_to_update, lr=lr2)
             model_ft, img_acc_hist, txt_acc_hist, loss_hist = train_model_incomplete(model_ft, data_loader, optimizer,
-                                                                                     temp, gamma, alpha, beta, max_epoch)
+                                                                                     temp, gamma, alpha, beta, max_epoch, eval_method)
         else:
             model_ft, img_acc_hist, txt_acc_hist, loss_hist = train_model(model_ft, data_loader, optimizer, alpha, beta,
-                                                                          temp, gamma, max_epoch)
+                                                                          temp, gamma, max_epoch, eval_method)
         print('...Training is completed...')
 
         torch.save(model_ft.state_dict(), 'model/DALGNN_' + dataset + '.pth')
@@ -131,10 +132,21 @@ if __name__ == '__main__':
     label = input_data_par['label_test']
     view1_feature = view1_feature.detach().cpu().numpy()
     view2_feature = view2_feature.detach().cpu().numpy()
-    img_to_txt = fx_calc_map_label(view1_feature, view2_feature, label)
-    print('...Image to Text MAP = {}'.format(img_to_txt))
+    if eval_method == 'recall':
+        img_to_txt = fx_calc_recall_label(view1_feature, view2_feature, label)
+        print('...Image to Text Recall = {}'.format(img_to_txt))
 
-    txt_to_img = fx_calc_map_label(view2_feature, view1_feature, label)
-    print('...Text to Image MAP = {}'.format(txt_to_img))
+        txt_to_img = fx_calc_recall_label(view2_feature, view1_feature, label)
+        print('...Text to Image Recall = {}'.format(txt_to_img))
 
-    print('...Average MAP = {}'.format(((img_to_txt + txt_to_img) / 2.)))
+        print('...Average MAP = {}'.format(((img_to_txt + txt_to_img) / 2.)))
+    else:
+        img_to_txt = fx_calc_map_label(view1_feature, view2_feature, label)
+        print('...Image to Text MAP = {}'.format(img_to_txt))
+
+        txt_to_img = fx_calc_map_label(view2_feature, view1_feature, label)
+        print('...Text to Image MAP = {}'.format(txt_to_img))
+
+        print('...Average MAP = {}'.format(((img_to_txt + txt_to_img) / 2.)))
+
+    cal_val_list(view1_feature, view2_feature, label)

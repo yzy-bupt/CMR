@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 import torchvision
 
-from evaluate import fx_calc_map_label
+from evaluate import fx_calc_map_label, fx_calc_recall_label
 from loss import cla_loss, mdl_loss, gan_loss, soft_con_loss
 
 
@@ -16,7 +16,7 @@ print("PyTorch Version: ", torch.__version__)
 print("Torchvision Version: ", torchvision.__version__)
 
 
-def train_model(model, data_loaders, optimizer, alpha, beta, temp, gamma, num_epochs=500):
+def train_model(model, data_loaders, optimizer, alpha, beta, temp, gamma, num_epochs=500, eval_method='map'):
     since = time.time()
     # device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     test_img_acc_history = []
@@ -111,8 +111,12 @@ def train_model(model, data_loaders, optimizer, alpha, beta, temp, gamma, num_ep
                 t_txts = np.concatenate(t_txts)
                 t_labels = np.concatenate(t_labels)
 
-                img2text = fx_calc_map_label(t_imgs, t_txts, t_labels)
-                txt2img = fx_calc_map_label(t_txts, t_imgs, t_labels)
+                if eval_method == 'recall':
+                    img2text = fx_calc_recall_label(t_imgs, t_txts, t_labels)
+                    txt2img = fx_calc_recall_label(t_txts, t_imgs, t_labels)
+                else:
+                    img2text = fx_calc_map_label(t_imgs, t_txts, t_labels)
+                    txt2img = fx_calc_map_label(t_txts, t_imgs, t_labels)
 
                 ds_len = float(len(data_loaders[phase].dataset))
 
@@ -141,7 +145,7 @@ def train_model(model, data_loaders, optimizer, alpha, beta, temp, gamma, num_ep
     return model, test_img_acc_history, test_txt_acc_history, epoch_loss_history
 
 
-def train_model_incomplete(model, data_loaders, optimizer, alpha, beta, temp, gamma, num_epochs=500):
+def train_model_incomplete(model, data_loaders, optimizer, alpha, beta, temp, gamma, num_epochs=500, eval_method='map'):
     since = time.time()
     # device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     test_img_acc_history = []
@@ -257,8 +261,12 @@ def train_model_incomplete(model, data_loaders, optimizer, alpha, beta, temp, ga
                 t_txts = np.concatenate(t_txts)
                 t_labels = np.concatenate(t_labels)
 
-                img2text = fx_calc_map_label(t_imgs, t_txts, t_labels)
-                txt2img = fx_calc_map_label(t_txts, t_imgs, t_labels)
+                if eval_method == 'recall':
+                    img2text = fx_calc_recall_label(t_imgs, t_txts, t_labels)
+                    txt2img = fx_calc_recall_label(t_txts, t_imgs, t_labels)
+                else:
+                    img2text = fx_calc_map_label(t_imgs, t_txts, t_labels)
+                    txt2img = fx_calc_map_label(t_txts, t_imgs, t_labels)
 
                 ds_len = float(len(data_loaders[phase].dataset))
                 epoch_loss = running_loss / len(data_loaders[phase].dataset)
