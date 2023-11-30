@@ -4,4 +4,8 @@
 /embedding
 /model
 /model_ori
+/model_v2
 README.md
+*.zip
+/flickr30k_images
+/annotations

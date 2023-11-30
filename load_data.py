@@ -8,6 +8,7 @@ from transformers import CLIPProcessor, CLIPModel
 from PIL import Image
 import os
 from pycocotools.coco import COCO
+import pandas as pd
 
 
 class DataLoaderX(DataLoader):
@@ -49,6 +50,53 @@ class SingleModalDataSet(Dataset):
 
 
 def get_loader(path, batch_size, INCOMPLETE=False, USE_INCOMPLETE=False):
+    df = pd.read_csv("flickr30k_images/results.csv", delimiter="|")
+    df.columns = ['image', 'caption_number', 'caption']
+    df['caption'] = df['caption'].str.lstrip()
+    df['caption_number'] = df['caption_number'].str.lstrip()
+    df.loc[19999, 'caption_number'] = "4"
+    df.loc[19999, 'caption'] = "A dog runs across the grass ."
+    ids = [id_ for id_ in range(len(df) // 5) for i in range(5)]
+    df['id'] = ids
+    df.to_csv("captions.csv", index=False)
+    df.head()
+
+    model = CLIPModel.from_pretrained("openai/clip-vit-large-patch14").cuda()
+    processor = CLIPProcessor.from_pretrained("openai/clip-vit-large-patch14")
+
+    img_list = []
+    txt_list = []
+    cnt = 0
+    for idx in range(0, len(df), 5):
+        img = Image.open('flickr30k_images/flickr30k_images/' + df.loc[idx, 'image'])
+        sentences = [df.loc[iidx, 'caption'] for iidx in range(idx, idx+5)]
+        inputs = processor(text=sentences, images=img, return_tensors="pt", padding=True, truncation=True).to(torch.device("cuda:0"))
+
+        outputs = model(**inputs)
+        img_list.append(outputs['image_embeds'].cpu().detach().numpy())
+        txt_list.append(outputs['text_embeds'].mean(dim=0)[None,:].cpu().detach().numpy())
+        cnt += 1
+        print(cnt)
+
+    img_list = np.concatenate(img_list)
+    txt_list = np.concatenate(txt_list)
+
+    shuffle_idx = np.arange(img_list.shape[0])
+    np.random.shuffle(shuffle_idx)
+    img_list = img_list[shuffle_idx]
+    txt_list = txt_list[shuffle_idx]
+
+    img_train = img_list[1000:]
+    img_test = img_list[:1000]
+    text_train = txt_list[1000:]
+    text_test = txt_list[:1000]
+
+    savemat("data/train_flickr30k.mat", {'img_train':img_train, 'txt_train':text_train, 'idx':shuffle_idx[1000:]}, do_compression=True)
+    savemat("data/test_flickr30k.mat", {'img_test':img_test, 'txt_train':text_test, 'idx':shuffle_idx[:1000]}, do_compression=True)
+
+    """
+    MSCOCO
+    """
     # data_mat = loadmat("labels.COCO.mat")
     # lab_list = data_mat['labels']
     # id_list = data_mat['id']
@@ -110,9 +158,9 @@ def get_loader(path, batch_size, INCOMPLETE=False, USE_INCOMPLETE=False):
     # savemat("data/train.mat", {'img_train':img_train, 'txt_train':text_train, 'lab_train':label_train}, do_compression=True)
     # savemat("data/test.mat", {'img_test':img_test, 'txt_train':text_test, 'lab_train':label_test}, do_compression=True)
     
-    if 0:
-        mat_train = loadmat("model/train.mat")
-        mat_test = loadmat("model/test.mat")
+    if 1:
+        mat_train = loadmat("data/train_flickr30k.mat")
+        mat_test = loadmat("data/test_flickr30k.mat")
         
         img_train = mat_train['img_train']
         text_train = mat_train['txt_train']
